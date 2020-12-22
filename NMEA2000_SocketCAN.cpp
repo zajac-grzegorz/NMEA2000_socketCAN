@@ -45,6 +45,7 @@ See also NMEA2000 library.
 #include <net/if.h>
 #include <linux/can.h>
 #include <linux/can/raw.h>
+#include <wiringSerial.h>
 
 //*****************************************************************************
 //  Pass in pointer to character array which contains (or will contain) the
@@ -58,7 +59,6 @@ tNMEA2000_SocketCAN::tNMEA2000_SocketCAN(char* CANport) : tNMEA2000()
         _CANport = CANport;
     else
         _CANport = defaultCANport;                                                 // NULL passed in, set to port to default: CAN0
-
 }
 
 
@@ -150,7 +150,7 @@ bool tNMEA2000_SocketCAN::CANGetFrame(unsigned long &id, unsigned char &len, uns
 //*****************************************************************************
 tSocketStream::tSocketStream(const char *_port) : port(-1) {
   if ( _port!=0 ) {
-    port=open(_port, O_RDWR | O_NOCTTY | O_NDELAY);
+    port=serialOpen(_port, 115200);
   }
 
   if ( port!=-1 ) {
@@ -163,7 +163,7 @@ tSocketStream::tSocketStream(const char *_port) : port(-1) {
 //*****************************************************************************
 tSocketStream::~tSocketStream() {
   if ( port!=-1 ) {
-    close(port);
+    serialClose(port);
   }
 }
 
@@ -175,38 +175,17 @@ tSocketStream::~tSocketStream() {
 *
 **********************************************************************/
 int tSocketStream::read() {
-  if ( port!=-1 ) {
-    return -1;
-  } else {
-    // Serial stream bridge -- Returns first byte if incoming data, or -1 on no available data.
-    struct timeval tv = { 0L, 0L };
-    fd_set fds;
-
-    FD_ZERO(&fds);
-    FD_SET(0, &fds);
-    if (select(1, &fds, NULL, NULL, &tv) < 0)                                   // Check fd=0 (stdin) to see if anything is there (timeout=0)
-        return -1;                                                              // Nothing is waiting for us.
-
-   return (getc(stdin));                                                         // Something is there, go get one char of it.
-  }
+    return serialGetchar(port);
 }
 
 
 
 //*****************************************************************************
 size_t tSocketStream::write(const uint8_t* data, size_t size) {                // Serial Stream bridge -- Write data to stream.
-  if ( port!=-1 ) {
-    return ::write(port,data,size);
-  } else {
-    size_t i;
+    serialPuts(port, (const char*)data);
 
-    for (i=0; (i<size) && data[i];  i++)                                        // send chars to stdout for 'size' or until null is found.
-        putc(data[i],stdout);
-
-    return(i);
-  }
+    return size;
 }
-
 
 // std::this_thread::sleep_for(std::chrono::milliseconds(x));
 // http://stackoverflow.com/questions/4184468/sleep-for-milliseconds
@@ -225,7 +204,3 @@ uint32_t millis(void) {
     return ((uint32_t) ((ticker.tv_sec * 1000) + (ticker.tv_nsec / 1000000)));
 
 };
-
-
-
-
